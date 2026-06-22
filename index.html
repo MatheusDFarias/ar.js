@@ -36,13 +36,14 @@ body { margin:0; overflow:hidden; }
  vr-mode-ui="enabled:false"
  arjs="sourceType:webcam; videoTexture:true; debugUIEnabled:false;">
 
- <a-camera gps-new-camera></a-camera>
+  <a-camera gps-new-camera="gpsMinDistance: 1; gpsMaxDistance: 1000;"></a-camera>
 
- <a-entity id="waypoint"
-    geometry="primitive: cone; radiusBottom: 2; radiusTop: 0.2; height: 5"
-    material="color: red"
+  <a-entity id="waypoint"
+    geometry="primitive: cone; radiusBottom: 3; radiusTop: 0; height: 8"
+    material="color: red; opacity: 0.9;"
+    position="0 25 0"
     gps-new-entity-place="latitude: -3.7413823; longitude: -38.5131173;">
- </a-entity>
+  </a-entity>
 
 </a-scene>
 
