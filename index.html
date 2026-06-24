@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>Navegador AR 3D - Direção Corrigida</title>
+  <title>Navegador AR 3D - Bússola Estabilizada</title>
 
   <link rel="icon" href="data:,">
 
@@ -53,8 +53,8 @@
 <body>
 
   <div id="tela-permissao">
-    <h2>Navegador AR Saint White - corrigindo lat long</h2>
-    <p>Olhe pelo celular em pé apontando para a rua.<br>Ative os sensores para visualizar o trajeto em tempo real.</p>
+    <h2>Navegador AR Urbano</h2>
+    <p>Segure o celular em pé apontando para a rua.<br>Ative os sensores para calibrar a bússola e o trajeto.</p>
     <button id="btn-iniciar">ATIVAR NAVEGAÇÃO 3D</button>
   </div>
 
@@ -65,31 +65,26 @@
   <div id="mini-map"></div>
 
   <script>
-    // --- Coordenadas (Fortaleza - Alinhado com seus testes) ---
+    // --- Coordenadas Ajustadas ---
     let posAtual = { lat: -3.7413823, lng: -38.5131173 }; 
     const posDestino = { lat: -3.7415537, lng: -38.5086707 };
     let headingCamera = 0; 
+    let distanciaAoDestino = 999;
 
     let cena, camera, renderizador, setaGrupo;
 
-    // Conversores matemáticos de matrizes de rotação 3D
-    const eulerDispositivo = new THREE.Euler();
-    const quatDispositivo = new THREE.Quaternion();
-    const vetorCameraTraseira = new THREE.Vector3(0, 0, -1); 
-
     document.getElementById('btn-iniciar').addEventListener('click', async function() {
       document.getElementById('tela-permissao').style.display = 'none';
-      document.getElementById('hud-texto').innerText = "Estabilizando imagem e sensores...";
+      document.getElementById('hud-texto').innerText = "Estabilizando giroscópio e sinal de GPS...";
 
-      // Inicializa câmera
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false });
         document.getElementById('webcam-video').srcObject = stream;
       } catch (err) {
-        alert("Não foi possível abrir a câmera traseira.");
+        alert("Permita o acesso à câmera para usar a Realidade Aumentada.");
       }
 
-      // Sensores modernos de orientação absoluta (Bússola sem travamento em pé)
+      // Inicialização da bússola absoluta sem travamentos
       if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
         DeviceOrientationEvent.requestPermission()
           .then(state => {
@@ -105,24 +100,21 @@
       }
     });
 
-    // Filtro matemático que impede a seta de travar quando o celular fica em pé
+    // Filtro matemático de compensação de inclinação (Garante funcionamento com celular em pé)
     function calcularDirecaoReal(event) {
       if (event.webkitCompassHeading) {
-        headingCamera = event.webkitCompassHeading; // iOS Nativo
-      } else {
-        // Android / Chrome: Transforma os dados brutos em uma matriz estável em pé
-        const alphaRad = THREE.MathUtils.degToRad(event.alpha || 0);
-        const betaRad = THREE.MathUtils.degToRad(event.beta || 0);
-        const gammaRad = THREE.MathUtils.degToRad(event.gamma || 0);
+        headingCamera = event.webkitCompassHeading; // iOS Nativo (Excelente precisão)
+      } else if (event.alpha !== null) {
+        // Android / Chrome: Desmembra a matriz de rotação espacial do W3C
+        const a = THREE.MathUtils.degToRad(event.alpha);
+        const b = THREE.MathUtils.degToRad(event.beta || 0);
+        const g = THREE.MathUtils.degToRad(event.gamma || 0);
 
-        eulerDispositivo.set(betaRad, alphaRad, -gammaRad, 'YXZ');
-        quatDispositivo.setFromEuler(eulerDispositivo);
+        // Projeta matematicamente o vetor da câmera traseira no plano horizontal do chão
+        const cam_dir_x = -Math.sin(a) * Math.sin(b) * Math.cos(g) - Math.sin(g) * Math.cos(a);
+        const cam_dir_y = -Math.sin(a) * Math.sin(g) + Math.sin(b) * Math.cos(a) * Math.cos(g);
 
-        // Identifica para onde a lente traseira (-Z) aponta no mundo real
-        const direcaoOlhar = vetorCameraTraseira.clone().applyQuaternion(quatDispositivo);
-        
-        // Projeta no plano horizontal do chão para ignorar a inclinação vertical do braço
-        let anguloCalculado = Math.atan2(direcaoOlhar.x, -direcaoOlhar.z) * 180 / Math.PI;
+        let anguloCalculado = Math.atan2(cam_dir_x, cam_dir_y) * 180 / Math.PI;
         headingCamera = (anguloCalculado + 360) % 360;
       }
     }
@@ -133,7 +125,6 @@
       executarLoop();
     }
 
-    // --- MODELAGEM DA SETA ESTILO CURSOR NAV (FOTO) ---
     function configurarCena3D() {
       const canvas = document.getElementById('canvas-three');
       cena = new THREE.Scene();
@@ -143,58 +134,53 @@
 
       renderizador = new THREE.WebGLRenderer({ canvas: canvas, alpha: true, antialias: true });
       renderizador.setSize(window.innerWidth, window.innerHeight);
-      renderizador.setPixelRatio(window.devicePixelRatio);
+      renderizador.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
-      // Adiciona Iluminação para criar o reflexo metalizado/cristalizado da imagem
-      const luzAmbiente = new THREE.AmbientLight(0xffffff, 0.6);
+      const luzAmbiente = new THREE.AmbientLight(0xffffff, 0.7);
       cena.add(luzAmbiente);
-      const luzDirecional = new THREE.DirectionalLight(0xffffff, 1.0);
-      luzDirecional.position.set(2, 5, 3);
+      const luzDirecional = new THREE.DirectionalLight(0xffffff, 0.9);
+      luzDirecional.position.set(1, 4, 2);
       cena.add(luzDirecional);
 
       setaGrupo = new THREE.Group();
 
-      // Desenhando a forma exata do cursor da foto (Chevron / Arrowhead)
+      // Geometria Estilo Cursor Azul Solicitado
       const formatoSeta = new THREE.Shape();
-      formatoSeta.moveTo(0, 0.45);        // Ponta frontal
-      formatoSeta.lineTo(0.3, -0.35);     // Asa Direita externa
-      formatoSeta.lineTo(0, -0.15);       // Entrada central traseira (V-notch)
-      formatoSeta.lineTo(-0.3, -0.35);    // Asa Esquerda externa
-      formatoSeta.lineTo(0, 0.45);        // Fecha na ponta
+      formatoSeta.moveTo(0, 0.45);        
+      formatoSeta.lineTo(0.28, -0.32);     
+      formatoSeta.lineTo(0, -0.14);       
+      formatoSeta.lineTo(-0.28, -0.32);    
+      formatoSeta.lineTo(0, 0.45);        
 
-      // Configuração para deixar o modelo 3D volumoso e com quinas chanfradas brilhantes
       const configuracaoExtrusao = {
-        depth: 0.06,
+        depth: 0.05,
         bevelEnabled: true,
-        bevelSegments: 4,
+        bevelSegments: 3,
         steps: 1,
-        bevelSize: 0.015,
-        bevelThickness: 0.015
+        bevelSize: 0.012,
+        bevelThickness: 0.012
       };
 
       const geometriaSeta = new THREE.ExtrudeGeometry(formatoSeta, configuracaoExtrusao);
-      geometriaSeta.center(); // Centraliza o eixo interno da peça
+      geometriaSeta.center(); 
 
-      // Material azul brilhante com leve transparência (Igual ao enviado)
       const materialSeta = new THREE.MeshStandardMaterial({
         color: 0x00b0ff,
-        roughness: 0.15,
-        metalness: 0.4,
+        roughness: 0.2,
+        metalness: 0.3,
         transparent: true,
         opacity: 0.85,
         side: THREE.DoubleSide
       });
 
       const setaMesh = new THREE.Mesh(geometriaSeta, materialSeta);
-      
-      // Deita a malha para ficar plana paralelamente ao asfalto da rua
-      setaMesh.rotation.x = -Math.PI / 2;
+      setaMesh.rotation.x = -Math.PI / 2; // Alinha paralela ao chão da rua
 
       setaGrupo.add(setaMesh);
       
-      // Ajusta a seta na parte de baixo da tela, flutuando à frente no campo de visão
-      setaGrupo.position.set(0, -0.6, -2.2); 
-      setaGrupo.rotation.x = 0.35; // Inclina levemente para dar perspectiva de profundidade na estrada
+      // Posiciona na parte inferior centralizada da tela
+      setaGrupo.position.set(0, -0.55, -2.0); 
+      setaGrupo.rotation.x = 0.4; // Inclinação de perspectiva de profundidade
 
       cena.add(setaGrupo);
 
@@ -205,7 +191,7 @@
       });
     }
 
-    // --- GEOLOCALIZAÇÃO ---
+    // Cálculo de Rumo Geográfico (Bearing)
     function calcularRumoDestino(lat1, lon1, lat2, lon2) {
       const dLon = (lon2 - lon1) * Math.PI / 180;
       const lat1Rad = lat1 * Math.PI / 180;
@@ -223,19 +209,28 @@
       return Math.round(R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a))));
     }
 
-    // --- LOOP DINÂMICO DE ATUALIZAÇÃO ---
+    // --- LOOP DE EXECUÇÃO COM AMORTECIMENTO (LERP) ---
     function executarLoop() {
       requestAnimationFrame(executarLoop);
 
       if (setaGrupo) {
-        const rumoDestino = calcularRumoDestino(posAtual.lat, posAtual.lng, posDestino.lat, posDestino.lng);
-        
-        // Faz a rotação responder de forma fluida para onde a câmera mira
-        const anguloDiferenca = rumoDestino - headingCamera;
-        const anguloRad = (anguloDiferenca * Math.PI) / 180;
+        if (distanciaAoDestino <= 12) {
+          // Efeito de comemoração/chegada: a seta gira suavemente no próprio eixo
+          setaGrupo.rotation.y += 0.02;
+        } else {
+          const rumoDestino = calcularRumoDestino(posAtual.lat, posAtual.lng, posDestino.lat, posDestino.lng);
+          
+          // Diferença entre o destino e para onde os seus olhos miram a tela
+          const anguloDiferenca = rumoDestino - headingCamera;
+          const alvoY = (anguloDiferenca * Math.PI) / 180;
 
-        // Gira no eixo Y (esquerda/direita) acompanhando o cenário da rua de forma dinâmica
-        setaGrupo.rotation.y = anguloRad;
+          // FILTRO LERP COMPENSADO: Evita giros bruscos de 360 graus na transição do Norte
+          let diffRot = alvoY - setaGrupo.rotation.y;
+          diffRot = Math.atan2(Math.sin(diffRot), Math.cos(diffRot)); // Normaliza entre -PI e +PI
+          
+          // Aplica 12% da movimentação por frame. Reduz ruídos e tremores completamente.
+          setaGrupo.rotation.y += diffRot * 0.12; 
+        }
       }
 
       renderizador.render(cena, camera);
@@ -259,12 +254,17 @@
           map.setView([posAtual.lat, posAtual.lng]);
           rotaLinha.setLatLngs([[posAtual.lat, posAtual.lng], [posDestino.lat, posDestino.lng]]);
 
-          const metros = calcularDistanciaMetros(posAtual.lat, posAtual.lng, posDestino.lat, posDestino.lng);
-          document.getElementById('hud-texto').innerText = `${metros}m para o destino.\nSiga o indicador azul na rua!`;
+          distanciaAoDestino = calcularDistanciaMetros(posAtual.lat, posAtual.lng, posDestino.lat, posDestino.lng);
+          
+          if (distanciaAoDestino <= 12) {
+            document.getElementById('hud-texto').innerText = "Você chegou ao destino localizado!";
+          } else {
+            document.getElementById('hud-texto').innerText = `${distanciaAoDestino}m para o destino.\nSiga o indicador azul na rua!`;
+          }
         }, (err) => {
-          const metros = calcularDistanciaMetros(posAtual.lat, posAtual.lng, posDestino.lat, posDestino.lng);
-          document.getElementById('hud-texto').innerText = `${metros}m (Modo Simulado).\nMire a câmera para a rua!`;
-        }, { enableHighAccuracy: true, maximumAge: 0 });
+          distanciaAoDestino = calcularDistanciaMetros(posAtual.lat, posAtual.lng, posDestino.lat, posDestino.lng);
+          document.getElementById('hud-texto').innerText = `${distanciaAoDestino}m (Simulado).\nMire a câmera para a rua!`;
+        }, { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 });
       }
     }
   </script>
