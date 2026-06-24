@@ -1,95 +1,109 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="utf-8" />
-  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>Festival Navigation - AR.js</title>
-  
+  <title>Navegador AR.js + Leaflet</title>
+
   <script src="https://aframe.io/releases/1.3.0/aframe.min.js"></script>
   <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar-nft.js"></script>
 
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
   <style>
-    body { margin: 0; overflow: hidden; font-family: Arial, sans-serif; }
+    body { margin: 0; overflow: hidden; }
     
-    /* Tela de ativação para segurança do navegador */
-    #tela-permissao {
-      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-      background: #121214; z-index: 9999; display: flex; flex-direction: column;
-      justify-content: center; align-items: center; color: white; text-align: center; padding: 20px;
-    }
-    button {
-      background: #00ff88; color: #121214; border: none; padding: 15px 40px;
-      font-size: 18px; font-weight: bold; border-radius: 30px; cursor: pointer; margin-top: 20px;
-    }
-    #hud {
-      position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
-      z-index: 10; background: rgba(0,0,0,0.8); color: #00ff88;
-      padding: 10px 20px; border-radius: 20px; font-weight: bold; display: none;
+    /* Estilo do Mini-Mapa na tela do AR */
+    #mini-map {
+      position: absolute;
+      bottom: 20px;
+      right: 20px;
+      width: 160px;
+      height: 160px;
+      border-radius: 50%;
+      border: 3px solid #fff;
+      box-shadow: 0px 0px 12px rgba(0,0,0,0.6);
+      z-index: 999;
+      transition: transform 0.1s ease;
     }
   </style>
 </head>
 <body>
 
-  <div id="tela-permissao">
-    <h2>Navegador do Festival</h2>
-    <p>Ative a câmera e a localização para ver os palcos em Realidade Aumentada.</p>
-    <button onclick="solicitarPermissoes()">ENTRAR NO MAPA AR</button>
-  </div>
+  <div id="mini-map"></div>
 
-  <div id="hud" id="txt-hud">Buscando sinal do GPS...</div>
-
-  <a-scene vr-mode-ui="enabled: false" embedded arjs="sourceType: webcam; debugUIEnabled: false;">
+  <a-scene 
+    vr-mode-ui="enabled: false"
+    embedded
+    arjs="sourceType: webcam; debugUIEnabled: false; videoTexture: true;">
     
-    <a-camera gps-camera rotation-reader></a-camera>
+    <a-camera id="ar-camera" gps-new-camera="simulateLatitude: -3.7413823; simulateLongitude: -38.5131173"></a-camera>
 
-    <a-entity id="marcador-destino"></a-entity>
+    <a-entity 
+      gps-new-entity-place="latitude: -3.74128; longitude: -38.510776"
+      scale="4 4 4">
+      <a-cone material="color: #ff0000; opacity: 0.8" rotation="180 0 0" position="0 5 0"></a-cone>
+      <a-text value="Seu Destino" align="center" position="0 7 0" scale="5 5 5" look-at="#ar-camera"></a-text>
+    </a-entity>
 
   </a-scene>
 
   <script>
-    // 1. Pega os dados enviados pela WebView do React Native (?lat=-23.5&lng=-46.6&nome=Palco)
-    const urlParams = new URLSearchParams(window.location.search);
-    const destinoLat = parseFloat(urlParams.get('lat'));
-    const destinoLng = parseFloat(urlParams.get('lng'));
-    const destinoNome = urlParams.get('nome') || "Destino";
+    // Coordenadas fornecidas
+    const origem = { lat: -3.7413823, lng: -38.5131173 };
+    const destino = { lat: -3.74128, lng: -38.510776 };
 
-    function solicitarPermissoes() {
-      // Solicita permissão de orientação (Obrigatório para iOS)
-      if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-        DeviceOrientationEvent.requestPermission()
-          .then(response => {
-            if (response === 'granted') { iniciarAR(); }
-          }).catch(console.error);
-      } else {
-        iniciarAR(); // Android entra direto aqui
-      }
+    // 1. Inicializa o mapa do Leaflet focado na sua origem
+    const map = L.map('mini-map', {
+      zoomControl: false,
+      attributionControl: false
+    }).setView([origem.lat, origem.lng], 16);
+
+    // Adiciona o mapa de ruas gratuito (OpenStreetMap)
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+
+    // Marcadores no Mini-mapa
+    const marcadorUsuario = L.marker([origem.lat, origem.lng]).addTo(map).bindPopup('Você');
+    const marcadorDestino = L.marker([destino.lat, destino.lng]).addTo(map).bindPopup('Destino');
+
+    // Desenha uma linha reta simples (métrica) ligando a origem ao destino no mapa
+    const rotaLinha = L.polyline([
+      [origem.lat, origem.lng],
+      [destino.lat, destino.lng]
+    ], { color: 'blue', weight: 4, opacity: 0.7 }).addTo(map);
+
+
+    // 2. Sincronização de Movimento Real (GPS)
+    if (navigator.geolocation) {
+      navigator.geolocation.watchPosition((position) => {
+        const latAtual = position.coords.latitude;
+        const lngAtual = position.coords.longitude;
+
+        // Atualiza a posição do usuário no mapa 2D conforme ele anda
+        marcadorUsuario.setLatLng([latAtual, lngAtual]);
+        map.setView([latAtual, lngAtual]);
+        
+        // Atualiza a linha do trajeto dinamicamente
+        rotaLinha.setLatLngs([[latAtual, lngAtual], [destino.lat, destino.lng]]);
+      }, (err) => {
+        console.warn("Aguardando sinal de GPS preciso...", err);
+      }, {
+        enableHighAccuracy: true
+      });
     }
 
-    function iniciarAR() {
-      document.getElementById('tela-permissao').style.display = 'none';
-      const hud = document.getElementById('hud');
-      hud.style.display = 'block';
-      hud.innerText = `Siga em direção ao: ${destinoNome}`;
-
-      if (destinoLat && destinoLng) {
-        const principalContainer = document.getElementById('marcador-destino');
-
-        // Configura a posição geográfica real do objeto usando o AR.js
-        principalContainer.setAttribute('gps-entity-place', `latitude: ${destinoLat}; longitude: ${destinoLng};`);
-
-        /* Renderiza um Pin flutuante gigante (Cone invertido) no local exato do destino.
-          Colocamos 'position="0 15 0"' para que ele flutue a 15 metros do chão, 
-          ficando visível mesmo acima da cabeça das pessoas no festival.
-        */
-        principalContainer.innerHTML = `
-          <a-cone color="#00ff88" radius-bottom="2" radius-top="0" height="5" position="0 15 0" rotation="180 0 0"></a-cone>
-          <a-text value="${destinoNome}" look-at="[gps-camera]" scale="25 25 25" position="0 20 0" align="center" color="#ffffff"></a-text>
-        `;
-      } else {
-        alert("Erro: Coordenadas de destino ausentes na URL.");
+    // 3. Sincronização de Direção (Bússola)
+    // Faz o mini-mapa rotacionar para que a frente do mapa seja sempre para onde você está olhando
+    const mapElement = document.getElementById('mini-map');
+    window.addEventListener('deviceorientationabsolute', (event) => {
+      if (event.alpha !== null) {
+        let bussolaGraus = event.alpha;
+        // Rotaciona a DIV do Leaflet inversamente ao giro do celular
+        mapElement.style.transform = `rotate(${-bussolaGraus}deg)`;
       }
-    }
+    }, true);
   </script>
+
 </body>
 </html>
