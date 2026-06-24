@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <title>Navegação AR.js Core Localização</title>
 
+  <link rel="icon" href="data:,">
+
   <script src="https://aframe.io/releases/1.3.0/aframe.min.js"></script>
   
   <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
@@ -41,7 +43,7 @@
 
   <div id="tela-permissao">
     <h2>Navegador AR 3D</h2>
-    <p>Para alinhar a seta tridimensional, precisamos acessar os sensores de orientação espacial e localização do seu aparelho.</p>
+    <p>Precisamos acessar os sensores de orientação espacial e localização do seu aparelho para renderizar a rota.</p>
     <button id="btn-iniciar">ATIVAR SENSORES</button>
   </div>
 
@@ -49,19 +51,30 @@
   <div id="mini-map"></div>
 
   <script>
+    // Coordenadas iniciais (Fortaleza)
     let posAtual = { lat: -3.7413823, lng: -38.5131173 };
     const posDestino = { lat: -3.74128, lng: -38.510776 };
-    let gpsPronto = false;
+    let bussolaHeading = 0; // Direção do celular em graus (0 = Norte, 90 = Leste...)
+
+    // Captura de orientação absoluta da bússola (Correção para APIs obsoletas)
+    function PurificarOrientacao(event) {
+      if (event.webkitCompassHeading) {
+        bussolaHeading = event.webkitCompassHeading; // iOS nativo
+      } else if (event.alpha !== null) {
+        // Android / Chrome: converte o valor alpha em rumo magnético de bússola
+        bussolaHeading = (360 - event.alpha) % 360;
+      }
+    }
 
     document.getElementById('btn-iniciar').addEventListener('click', function() {
-      // Solicitação de permissão para iOS 13+ e navegadores modernos
       if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
         DeviceOrientationEvent.requestPermission()
           .then(permissionState => {
             if (permissionState === 'granted') {
+              window.addEventListener('deviceorientationabsolute', PurificarOrientacao, true);
               inicializarApp();
             } else {
-              alert('Os sensores de bússola foram negados. A precisão da seta será afetada.');
+              alert('A bússola foi negada. A seta pode não apontar corretamente.');
               inicializarApp(); 
             }
           })
@@ -70,6 +83,12 @@
             inicializarApp();
           });
       } else {
+        // Navegadores que não exigem prompt síncrono (Android antigos / Desktop)
+        if ('ondeviceorientationabsolute' in window) {
+          window.addEventListener('deviceorientationabsolute', PurificarOrientacao, true);
+        } else {
+          window.addEventListener('deviceorientation', PurificarOrientacao, true);
+        }
         inicializarApp();
       }
     });
@@ -80,49 +99,55 @@
       ativarGPS();
     }
 
-    // Componente da Seta 3D corrigido para buscar a posição correta no ciclo do A-Frame
-    AFRAME.registerComponent('seta-direcional-3d', {
-      init: function() {
-        this.el.setAttribute('visible', 'false');
-      },
+    // Função matemática para calcular o Rumo Geográfico (Bearing) entre dois pontos
+    function calcularBearing(lat1, lon1, lat2, lon2) {
+      const dLon = (lon2 - lon1) * Math.PI / 180;
+      const lat1Rad = lat1 * Math.PI / 180;
+      const lat2Rad = lat2 * Math.PI / 180;
+      const y = Math.sin(dLon) * Math.cos(lat2Rad);
+      const x = Math.cos(lat1Rad) * Math.sin(lat2Rad) - Math.sin(lat1Rad) * Math.cos(lat2Rad) * Math.cos(dLon);
+      const brng = Math.atan2(y, x) * 180 / Math.PI;
+      return (brng + 360) % 360;
+    }
+
+    // COMPONENTE DA SETA HUD MATEMÁTICA
+    AFRAME.registerComponent('seta-navegacao-hud', {
       tick: function () {
-        if (!gpsPronto) return;
+        // Calcula a direção que o destino está em relação ao norte real
+        const bearingDestino = calcularBearing(posAtual.lat, posAtual.lng, posDestino.lat, posDestino.lng);
+        
+        // Calcula o desvio angular baseado na rotação atual do aparelho (bussolaHeading)
+        let rotaYLocal = bussolaHeading - bearingDestino;
 
-        const destinoEl = document.getElementById('objeto-destino');
-        if (!destinoEl) return;
+        // X: 90 deita o cone para apontar para frente. Y atualiza dinamicamente conforme você vira o corpo.
+        this.el.setAttribute('rotation', { x: 90, y: rotaYLocal, z: 0 });
 
-        // Ativa visibilidade da seta assim que o GPS responde
+        // Garante a visibilidade imediata na tela
         if (this.el.getAttribute('visible') === 'false') {
           this.el.setAttribute('visible', 'true');
         }
-
-        // Obtém a posição local calculada pelo AR.js para o objeto de destino
-        const destinoPos = destinoEl.object3D.position;
-        
-        // Faz o container da seta apontar para a coordenada 3D do destino
-        this.el.object3D.lookAt(destinoPos);
-        
-        // Ajuste de rotação para compensar a orientação nativa do cone do A-Frame
-        this.el.object3D.rotateX(Math.PI / 2); 
       }
     });
   </script>
 
   <a-scene embedded arjs="sourceType: webcam; videoTexture: true; debugUIEnabled: false;">
     
-    <a-camera id="ar-camera" gps-camera="simulateLatitude: -3.7413823; simulateLongitude: -38.5131173;" rotation-reader></a-camera>
+    <a-camera id="ar-camera" gps-camera="simulateLatitude: -3.7413823; simulateLongitude: -38.5131173;" rotation-reader>
+      
+      <a-entity 
+        id="seta3d" 
+        seta-navegacao-hud
+        position="0 -0.5 -1.2" 
+        scale="1 1 1"
+        visible="false">
+        <a-cone material="color: #ff2222; shader: flat" radius-bottom="0.06" radius-top="0" height="0.22"></a-cone>
+        <a-box material="color: #990000; shader: flat" width="0.02" height="0.07" depth="0.02" position="0 -0.11 0"></a-box>
+      </a-entity>
 
-    <a-entity 
-      id="seta3d" 
-      seta-direcional-3d
-      position="0 -0.4 -1.5" 
-      scale="1 1 1">
-      <a-cone material="color: #ff2222; shader: flat" radius-bottom="0.06" radius-top="0" height="0.22"></a-cone>
-      <a-box material="color: #990000; shader: flat" width="0.02" height="0.07" depth="0.02" position="0 -0.11 0"></a-box>
-    </a-entity>
+    </a-camera>
 
     <a-entity id="objeto-destino" gps-entity-place="latitude: -3.74128; longitude: -38.510776">
-      <a-cylinder material="color: #00ffcc; opacity: 0.4; shader: flat" radius="1.5" height="15" position="0 7.5 0"></a-cylinder>
+      <a-cylinder material="color: #00ffcc; opacity: 0.4; shader: flat" radius="2" height="30" position="0 15 0"></a-cylinder>
     </a-entity>
   </a-scene>
 
@@ -136,7 +161,7 @@
     const rotaLinha = L.polyline([[posAtual.lat, posAtual.lng], [posDestino.lat, posDestino.lng]], { color: '#ff2222', weight: 4 }).addTo(map);
 
     function calcularDistancia(lat1, lon1, lat2, lon2) {
-      const R = 6371e3; // Raio da terra em metros
+      const R = 6371e3; // Raio da Terra em metros
       const rLat1 = lat1 * Math.PI / 180; const rLat2 = lat2 * Math.PI / 180;
       const dLat = (lat2 - lat1) * Math.PI / 180; const dLon = (lon2 - lon1) * Math.PI / 180;
       const a = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.cos(rLat1) * Math.cos(rLat2) * Math.sin(dLon/2) * Math.sin(dLon/2);
@@ -144,29 +169,26 @@
     }
 
     function ativarGPS() {
-      const cameraEl = document.getElementById('ar-camera');
-      
-      // O AR.js dispara esse evento quando o sinal GPS inicial é acoplado à câmera AR
-      cameraEl.addEventListener('gps-camera-update-position', () => {
-        gpsPronto = true;
-      });
-
       if (navigator.geolocation) {
         navigator.geolocation.watchPosition((position) => {
           posAtual.lat = position.coords.latitude;
           posAtual.lng = position.coords.longitude;
 
-          // Atualiza elementos do mapa Leaflet
+          // Atualiza o mini-mapa em tempo real
           marcadorUsuario.setLatLng([posAtual.lat, posAtual.lng]);
           map.setView([posAtual.lat, posAtual.lng]);
           rotaLinha.setLatLngs([[posAtual.lat, posAtual.lng], [posDestino.lat, posDestino.lng]]);
 
-          // Cálculos de distância no HUD
+          // Atualiza a distância no painel superior
           const metros = calcularDistancia(posAtual.lat, posAtual.lng, posDestino.lat, posDestino.lng);
-          if (gpsPronto) {
-            document.getElementById('hud-texto').innerText = `${metros}m para o destino.\nSiga a seta 3D vermelha!`;
-          }
-        }, (err) => console.error("Erro ao ler GPS: ", err), { enableHighAccuracy: true, maximumAge: 0 });
+          document.getElementById('hud-texto').innerText = `${metros}m para o destino.\nSiga a seta 3D vermelha!`;
+
+        }, (err) => {
+          console.error("GPS Nativo indisponível: ", err);
+          // Fallback para testes em computadores (usará a distância com base na simulação)
+          const metros = calcularDistancia(posAtual.lat, posAtual.lng, posDestino.lat, posDestino.lng);
+          document.getElementById('hud-texto').innerText = `${metros}m (Modo Simulado).\nSiga a seta 3D vermelha!`;
+        }, { enableHighAccuracy: true, maximumAge: 0 });
       }
     }
   </script>
