@@ -66,8 +66,13 @@
 
   <script>
     // --- Coordenadas Ajustadas ---
+
+const urlParams = new URLSearchParams(window.location.search);
+const latParam = parseFloat(urlParams.get('lat'));
+const lngParam = parseFloat(urlParams.get('lng'));
+
     let posAtual = { lat: -3.7413823, lng: -38.5131173 }; 
-    let posDestino = { lat: -3.7415537, lng: -38.5086707 }; // Destino Final
+    let posDestino = { lat:latParam, lng: lngParam }; // Destino Final
     let headingCamera = 0; 
     let distanciaAoDestino = 999;
 
