@@ -179,17 +179,15 @@
       setaGrupo.rotation.x = 0.4; 
       cena.add(setaGrupo);
 
-      // --- 2. CONFIGURAÇÃO DO POINTER VERMELHO (MUDANÇA SOLICITADA) ---
+      // --- 2. CONFIGURAÇÃO DO POINTER VERMELHO ---
       pinGrupo = new THREE.Group();
 
       const formatoPin = new THREE.Shape();
-      // Desenha o contorno arredondado do Pin da imagem externa
       formatoPin.moveTo(0, -0.35); 
       formatoPin.bezierCurveTo(0.24, -0.15, 0.28, 0.12, 0.28, 0.26); 
       formatoPin.bezierCurveTo(0.28, 0.45, -0.28, 0.45, -0.28, 0.26); 
       formatoPin.bezierCurveTo(-0.28, 0.12, -0.24, -0.15, 0, -0.35); 
 
-      // Cria o furo central redondo característico do Pointer
       const furoPin = new THREE.Path();
       furoPin.absarc(0, 0.24, 0.09, 0, Math.PI * 2, true);
       formatoPin.holes.push(furoPin);
@@ -207,7 +205,7 @@
       geometriaPin.center();
 
       const materialPin = new THREE.MeshStandardMaterial({
-        color: 0xff3b30, // Vermelho brilhante da imagem
+        color: 0xff3b30, 
         roughness: 0.15,
         metalness: 0.2,
         side: THREE.DoubleSide
@@ -216,9 +214,8 @@
       const pinMesh = new THREE.Mesh(geometriaPin, materialPin);
       pinGrupo.add(pinMesh);
       
-      // Centralizado em tela de frente para a visão do usuário
       pinGrupo.position.set(0, -0.1, -2.0); 
-      pinGrupo.visible = false; // Inicia invisível
+      pinGrupo.visible = false; 
       cena.add(pinGrupo);
 
 
@@ -250,11 +247,10 @@
       requestAnimationFrame(executarLoop);
 
       if (setaGrupo && pinGrupo) {
-        // DETECÇÃO DE CHEGADA (MUDANÇA SOLICITADA)
         if (distanciaAoDestino <= 12) {
-          setaGrupo.visible = false;  // Seta some completamente
-          pinGrupo.visible = true;    // Pointer Vermelho surge em tela
-          pinGrupo.rotation.y += 0.025; // Animação de rotação contínua do Pointer
+          setaGrupo.visible = false;  
+          pinGrupo.visible = true;    
+          pinGrupo.rotation.y += 0.025; 
         } else {
           setaGrupo.visible = true;
           pinGrupo.visible = false;
@@ -277,8 +273,19 @@
     const map = L.map('mini-map', { zoomControl: false, attributionControl: false }).setView([posAtual.lat, posAtual.lng], 16);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
+    // Ícone vermelho personalizado adicionado aqui para o destino
+    const iconeVermelho = new L.Icon({
+      iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png',
+      shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
+      iconSize: [25, 41],
+      iconAnchor: [12, 41],
+      popupAnchor: [1, -34],
+      shadowSize: [41, 41]
+    });
+
     const marcadorUsuario = L.marker([posAtual.lat, posAtual.lng]).addTo(map);
-    const marcadorDestino = L.marker([posDestino.lat, posDestino.lng]).addTo(map);
+    // Aplicado o ícone modificado no marcador de destino
+    const marcadorDestino = L.marker([posDestino.lat, posDestino.lng], { icon: iconeVermelho }).addTo(map);
     const rotaLinha = L.polyline([[posAtual.lat, posAtual.lng], [posDestino.lat, posDestino.lng]], { color: '#00b0ff', weight: 4 }).addTo(map);
 
     function ativarGPS() {
