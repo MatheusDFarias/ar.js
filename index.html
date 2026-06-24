@@ -79,17 +79,20 @@
     embedded
     arjs="sourceType: webcam; debugUIEnabled: false; videoTexture: true;">
     
-    <a-camera id="ar-camera" gps-new-camera="simulateLatitude: -3.7413823; simulateLongitude: -38.5131173">
-      
-      <a-entity 
-        id="seta3d" 
-        seta-direcional-3d
-        position="0 -0.4 -1.5" 
-        scale="0.15 0.3 0.15">
-        <a-cone material="color: #ff3333; metalness: 0.5; roughness: 0.2"></a-cone>
-      </a-entity>
+<a-camera id="ar-camera" gps-new-camera="simulateLatitude: -3.7413823; simulateLongitude: -38.5131173">
+  
+  <a-entity 
+    id="seta3d" 
+    seta-direcional-3d
+    position="0 -0.3 -1.2" 
+    scale="1 1 1">
+    
+    <a-cone material="color: #ff3333; shader: flat" radius-bottom="0.08" radius-top="0" height="0.25" rotation="0 0 0" position="0 0 0"></a-cone>
+    <a-box material="color: #cc0000; shader: flat" width="0.04" height="0.1" depth="0.04" position="0 -0.12 0"></a-box>
 
-    </a-camera>
+  </a-entity>
+
+</a-camera>
 
     <a-entity id="objeto-destino" gps-new-entity-place="latitude: -3.74128; longitude: -38.510776">
       <a-cylinder material="color: #00ffcc; opacity: 0.6" radius="3" height="30" position="0 15 0"></a-cylinder>
