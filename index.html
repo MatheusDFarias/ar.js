@@ -7,7 +7,7 @@
 
   <script src="https://aframe.io/releases/1.3.0/aframe.min.js"></script>
   
-  <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar-location-only.js"></script>
+  <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
 
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -24,6 +24,7 @@
       background: rgba(0, 0, 0, 0.8); color: white; padding: 10px 20px;
       border-radius: 20px; font-size: 16px; font-weight: bold; z-index: 1000;
       text-align: center; width: 80%; max-width: 300px;
+      white-space: pre-line;
     }
     #tela-permissao {
       position: absolute; top: 0; left: 0; width: 100%; height: 100%;
@@ -53,14 +54,14 @@
     let gpsPronto = false;
 
     document.getElementById('btn-iniciar').addEventListener('click', function() {
-      // Solicitação explícita dos sensores modernos de orientação (Correção para o erro de obsoleto)
+      // Solicitação de permissão para iOS 13+ e navegadores modernos
       if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
         DeviceOrientationEvent.requestPermission()
           .then(permissionState => {
             if (permissionState === 'granted') {
               inicializarApp();
             } else {
-              alert('Os sensores de bússola foram negados. A seta não poderá girar de forma síncrona.');
+              alert('Os sensores de bússola foram negados. A precisão da seta será afetada.');
               inicializarApp(); 
             }
           })
@@ -79,7 +80,7 @@
       ativarGPS();
     }
 
-    // Componente da Seta 3D
+    // Componente da Seta 3D corrigido para buscar a posição correta no ciclo do A-Frame
     AFRAME.registerComponent('seta-direcional-3d', {
       init: function() {
         this.el.setAttribute('visible', 'false');
@@ -87,31 +88,34 @@
       tick: function () {
         if (!gpsPronto) return;
 
-        const cameraEl = document.getElementById('ar-camera');
         const destinoEl = document.getElementById('objeto-destino');
-        
-        if (!cameraEl || !destinoEl) return;
+        if (!destinoEl) return;
 
-        this.el.setAttribute('visible', 'true');
+        // Ativa visibilidade da seta assim que o GPS responde
+        if (this.el.getAttribute('visible') === 'false') {
+          this.el.setAttribute('visible', 'true');
+        }
 
-        // Captura a posição gerada para o destino no ambiente 3D
+        // Obtém a posição local calculada pelo AR.js para o objeto de destino
         const destinoPos = destinoEl.object3D.position;
         
-        // Faz o node do A-Frame apontar seus eixos para o vetor do destino
+        // Faz o container da seta apontar para a coordenada 3D do destino
         this.el.object3D.lookAt(destinoPos);
-        this.el.object3D.rotateX(Math.PI / 2); // Alinha o bico do cone para a frente
+        
+        // Ajuste de rotação para compensar a orientação nativa do cone do A-Frame
+        this.el.object3D.rotateX(Math.PI / 2); 
       }
     });
   </script>
 
   <a-scene embedded arjs="sourceType: webcam; videoTexture: true; debugUIEnabled: false;">
     
-    <a-camera id="ar-camera" gps-camera="simulateLatitude: -3.7413823; simulateLongitude: -38.5131173" rotation-reader></a-camera>
+    <a-camera id="ar-camera" gps-camera="simulateLatitude: -3.7413823; simulateLongitude: -38.5131173;" rotation-reader></a-camera>
 
     <a-entity 
       id="seta3d" 
       seta-direcional-3d
-      position="0 -0.4 -1.3" 
+      position="0 -0.4 -1.5" 
       scale="1 1 1">
       <a-cone material="color: #ff2222; shader: flat" radius-bottom="0.06" radius-top="0" height="0.22"></a-cone>
       <a-box material="color: #990000; shader: flat" width="0.02" height="0.07" depth="0.02" position="0 -0.11 0"></a-box>
@@ -132,7 +136,7 @@
     const rotaLinha = L.polyline([[posAtual.lat, posAtual.lng], [posDestino.lat, posDestino.lng]], { color: '#ff2222', weight: 4 }).addTo(map);
 
     function calcularDistancia(lat1, lon1, lat2, lon2) {
-      const R = 6371e3;
+      const R = 6371e3; // Raio da terra em metros
       const rLat1 = lat1 * Math.PI / 180; const rLat2 = lat2 * Math.PI / 180;
       const dLat = (lat2 - lat1) * Math.PI / 180; const dLon = (lon2 - lon1) * Math.PI / 180;
       const a = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.cos(rLat1) * Math.cos(rLat2) * Math.sin(dLon/2) * Math.sin(dLon/2);
@@ -142,6 +146,7 @@
     function ativarGPS() {
       const cameraEl = document.getElementById('ar-camera');
       
+      // O AR.js dispara esse evento quando o sinal GPS inicial é acoplado à câmera AR
       cameraEl.addEventListener('gps-camera-update-position', () => {
         gpsPronto = true;
       });
@@ -151,15 +156,17 @@
           posAtual.lat = position.coords.latitude;
           posAtual.lng = position.coords.longitude;
 
+          // Atualiza elementos do mapa Leaflet
           marcadorUsuario.setLatLng([posAtual.lat, posAtual.lng]);
           map.setView([posAtual.lat, posAtual.lng]);
           rotaLinha.setLatLngs([[posAtual.lat, posAtual.lng], [posDestino.lat, posDestino.lng]]);
 
+          // Cálculos de distância no HUD
           const metros = calcularDistancia(posAtual.lat, posAtual.lng, posDestino.lat, posDestino.lng);
           if (gpsPronto) {
             document.getElementById('hud-texto').innerText = `${metros}m para o destino.\nSiga a seta 3D vermelha!`;
           }
-        }, (err) => console.error(err), { enableHighAccuracy: true });
+        }, (err) => console.error("Erro ao ler GPS: ", err), { enableHighAccuracy: true, maximumAge: 0 });
       }
     }
   </script>
