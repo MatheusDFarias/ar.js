@@ -191,7 +191,7 @@
 
       // Furo interno perfeitamente redondo e concêntrico
       const furoPin = new THREE.Path();
-      furoPin.absarc(0, 0.22, 0.09, 0, Math.PI * 2, true);
+      furoPin.absarc(0, 0.22, 0.09, 0, Math.PI * 8, true);
       formatoPin.holes.push(furoPin);
 
       const configuracaoExtrusaoPin = {
@@ -295,7 +295,7 @@
         navigator.geolocation.watchPosition((position) => {
           posAtual.lat = position.coords.latitude;
           posAtual.lng = position.coords.longitude;
-          posDestino.lat = position.coords.latitude;
+                    posDestino.lat = position.coords.latitude;
           posDestino.lng = position.coords.longitude;
           marcadorUsuario.setLatLng([posAtual.lat, posAtual.lng]);
           map.setView([posAtual.lat, posAtual.lng]);
