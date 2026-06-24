@@ -67,11 +67,11 @@
   <script>
     // --- Coordenadas Ajustadas ---
     let posAtual = { lat: -3.7413823, lng: -38.5131173 }; 
-      const posDestino = { lat: -3.7415537, lng: -38.5086707 }; // Destino Final
+    const posDestino = { lat: -3.7415537, lng: -38.5086707 }; // Destino Final
     let headingCamera = 0; 
     let distanciaAoDestino = 999;
 
-    let cena, camera, renderizador, setaGrupo;
+    let cena, camera, renderizador, setaGrupo, pinGrupo;
 
     document.getElementById('btn-iniciar').addEventListener('click', async function() {
       document.getElementById('tela-permissao').style.display = 'none';
@@ -140,9 +140,9 @@
       luzDirecional.position.set(1, 4, 2);
       cena.add(luzDirecional);
 
+      // --- 1. CONFIGURAÇÃO DA SETA AZUL DE TRAJETO ---
       setaGrupo = new THREE.Group();
 
-      // Desenho do Cursor Azul
       const formatoSeta = new THREE.Shape();
       formatoSeta.moveTo(0, 0.45);        
       formatoSeta.lineTo(0.28, -0.32);     
@@ -175,11 +175,52 @@
       setaMesh.rotation.x = -Math.PI / 2; 
 
       setaGrupo.add(setaMesh);
-      
       setaGrupo.position.set(0, -0.55, -2.0); 
       setaGrupo.rotation.x = 0.4; 
-
       cena.add(setaGrupo);
+
+      // --- 2. CONFIGURAÇÃO DO POINTER VERMELHO (MUDANÇA SOLICITADA) ---
+      pinGrupo = new THREE.Group();
+
+      const formatoPin = new THREE.Shape();
+      // Desenha o contorno arredondado do Pin da imagem externa
+      formatoPin.moveTo(0, -0.35); 
+      formatoPin.bezierCurveTo(0.24, -0.15, 0.28, 0.12, 0.28, 0.26); 
+      formatoPin.bezierCurveTo(0.28, 0.45, -0.28, 0.45, -0.28, 0.26); 
+      formatoPin.bezierCurveTo(-0.28, 0.12, -0.24, -0.15, 0, -0.35); 
+
+      // Cria o furo central redondo característico do Pointer
+      const furoPin = new THREE.Path();
+      furoPin.absarc(0, 0.24, 0.09, 0, Math.PI * 2, true);
+      formatoPin.holes.push(furoPin);
+
+      const configuracaoExtrusaoPin = {
+        depth: 0.06,
+        bevelEnabled: true,
+        bevelSegments: 5,
+        steps: 1,
+        bevelSize: 0.018,
+        bevelThickness: 0.018
+      };
+
+      const geometriaPin = new THREE.ExtrudeGeometry(formatoPin, configuracaoExtrusaoPin);
+      geometriaPin.center();
+
+      const materialPin = new THREE.MeshStandardMaterial({
+        color: 0xff3b30, // Vermelho brilhante da imagem
+        roughness: 0.15,
+        metalness: 0.2,
+        side: THREE.DoubleSide
+      });
+
+      const pinMesh = new THREE.Mesh(geometriaPin, materialPin);
+      pinGrupo.add(pinMesh);
+      
+      // Centralizado em tela de frente para a visão do usuário
+      pinGrupo.position.set(0, -0.1, -2.0); 
+      pinGrupo.visible = false; // Inicia invisível
+      cena.add(pinGrupo);
+
 
       window.addEventListener('resize', () => {
         camera.aspect = window.innerWidth / window.innerHeight;
@@ -208,19 +249,20 @@
     function executarLoop() {
       requestAnimationFrame(executarLoop);
 
-      if (setaGrupo) {
+      if (setaGrupo && pinGrupo) {
+        // DETECÇÃO DE CHEGADA (MUDANÇA SOLICITADA)
         if (distanciaAoDestino <= 12) {
-          setaGrupo.rotation.y += 0.02; // Gira comemorando a chegada
+          setaGrupo.visible = false;  // Seta some completamente
+          pinGrupo.visible = true;    // Pointer Vermelho surge em tela
+          pinGrupo.rotation.y += 0.025; // Animação de rotação contínua do Pointer
         } else {
+          setaGrupo.visible = true;
+          pinGrupo.visible = false;
+
           const rumoDestino = calcularRumoDestino(posAtual.lat, posAtual.lng, posDestino.lat, posDestino.lng);
-          
           const anguloDiferenca = rumoDestino - headingCamera;
-          
-          // CRUCIAL: Multiplicado por -1 para converter o sentido horário da bússola 
-          // para o sentido anti-horário nativo do Three.js
           const alvoY = -((anguloDiferenca * Math.PI) / 180);
 
-          // Filtro para suavizar o movimento e evitar que a seta dê voltas completas bruscas
           let diffRot = alvoY - setaGrupo.rotation.y;
           diffRot = Math.atan2(Math.sin(diffRot), Math.cos(diffRot)); 
           
