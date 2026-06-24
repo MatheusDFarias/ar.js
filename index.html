@@ -183,22 +183,24 @@
       pinGrupo = new THREE.Group();
 
       const formatoPin = new THREE.Shape();
-      formatoPin.moveTo(0, -0.35); 
-      formatoPin.bezierCurveTo(0.24, -0.15, 0.28, 0.12, 0.28, 0.26); 
-      formatoPin.bezierCurveTo(0.28, 0.45, -0.28, 0.45, -0.28, 0.26); 
-      formatoPin.bezierCurveTo(-0.28, 0.12, -0.24, -0.15, 0, -0.35); 
+      // Curvas geométricas calibradas para simular com precisão a gota arredondada da foto
+      formatoPin.moveTo(0, -0.42); 
+      formatoPin.bezierCurveTo(0.18, -0.22, 0.28, 0.02, 0.28, 0.22); 
+      formatoPin.bezierCurveTo(0.28, 0.52, -0.28, 0.52, -0.28, 0.22); 
+      formatoPin.bezierCurveTo(-0.28, 0.02, -0.18, -0.22, 0, -0.42); 
 
+      // Furo interno perfeitamente redondo e concêntrico
       const furoPin = new THREE.Path();
-      furoPin.absarc(0, 0.24, 0.09, 0, Math.PI * 2, true);
+      furoPin.absarc(0, 0.22, 0.09, 0, Math.PI * 2, true);
       formatoPin.holes.push(furoPin);
 
       const configuracaoExtrusaoPin = {
-        depth: 0.06,
+        depth: 0.08,            // Mais espesso para dar volume idêntico à imagem 3D
         bevelEnabled: true,
-        bevelSegments: 5,
+        bevelSegments: 6,       // Mais segmentos para quinas super suaves/arredondadas
         steps: 1,
-        bevelSize: 0.018,
-        bevelThickness: 0.018
+        bevelSize: 0.02,        // Chanfro marcado para criar as bordas iluminadas da foto
+        bevelThickness: 0.02
       };
 
       const geometriaPin = new THREE.ExtrudeGeometry(formatoPin, configuracaoExtrusaoPin);
@@ -206,8 +208,8 @@
 
       const materialPin = new THREE.MeshStandardMaterial({
         color: 0xff3b30, 
-        roughness: 0.15,
-        metalness: 0.2,
+        roughness: 0.12,        // Acabamento brilhante (Glossy) para refletir os pontos de luz
+        metalness: 0.1,         // Aspecto de plástico/borracha polida premium
         side: THREE.DoubleSide
       });
 
@@ -215,7 +217,7 @@
       pinGrupo.add(pinMesh);
       
       pinGrupo.position.set(0, -0.1, -2.0); 
-      pinGrupo.visible = false; 
+      pinGrupo.visible = true; 
       cena.add(pinGrupo);
 
 
