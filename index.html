@@ -295,8 +295,7 @@
         navigator.geolocation.watchPosition((position) => {
           posAtual.lat = position.coords.latitude;
           posAtual.lng = position.coords.longitude;
-                    posDestino.lat = position.coords.latitude;
-          posDestino.lng = position.coords.longitude;
+
           marcadorUsuario.setLatLng([posAtual.lat, posAtual.lng]);
           map.setView([posAtual.lat, posAtual.lng]);
           rotaLinha.setLatLngs([[posAtual.lat, posAtual.lng], [posDestino.lat, posDestino.lng]]);
