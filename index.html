@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>Navegação AR.js com Seta 3D</title>
+  <title>Navegação AR.js Estabilizada</title>
 
   <script src="https://aframe.io/releases/1.3.0/aframe.min.js"></script>
   <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar-nft.js"></script>
@@ -13,63 +13,50 @@
 
   <style>
     body { margin: 0; overflow: hidden; font-family: sans-serif; }
-    
     #mini-map {
-      position: absolute;
-      bottom: 20px;
-      right: 20px;
-      width: 140px;
-      height: 140px;
-      border-radius: 50%;
-      border: 3px solid #fff;
-      box-shadow: 0px 0px 10px rgba(0,0,0,0.5);
-      z-index: 999;
+      position: absolute; bottom: 20px; right: 20px;
+      width: 140px; height: 140px; border-radius: 50%;
+      border: 3px solid #fff; box-shadow: 0px 0px 10px rgba(0,0,0,0.5); z-index: 999;
     }
-
     #hud-texto {
-      position: absolute;
-      top: 20px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: rgba(0, 0, 0, 0.7);
-      color: white;
-      padding: 10px 20px;
-      border-radius: 20px;
-      font-size: 16px;
-      font-weight: bold;
-      z-index: 1000;
-      pointer-events: none;
+      position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
+      background: rgba(0, 0, 0, 0.8); color: white; padding: 10px 20px;
+      border-radius: 20px; font-size: 16px; font-weight: bold; z-index: 1000;
     }
   </style>
 </head>
 <body>
 
-  <div id="hud-texto">Calculando distância...</div>
+  <div id="hud-texto">Aguardando sinal de GPS do dispositivo...</div>
   <div id="mini-map"></div>
 
   <script>
-    // Configurações das suas Coordenadas Reais
+    // Suas Coordenadas Reais configuradas de forma global
     let posAtual = { lat: -3.7413823, lng: -38.5131173 };
     const posDestino = { lat: -3.74128, lng: -38.510776 };
+    let gpsPronto = false;
 
-    // Componente customizado do A-Frame para fazer a seta 3D apontar para o destino
+    // Componente customizado com verificação de segurança (Impede o erro de inicialização)
     AFRAME.registerComponent('seta-direcional-3d', {
+      init: function() {
+        // Oculta a seta no início até que o GPS esteja 100% calibrado
+        this.el.setAttribute('visible', 'false');
+      },
       tick: function () {
+        // Se o GPS ainda não inicializou e enviou dados válidos, não executa a rotação 3D
+        if (!gpsPronto) return;
+
         const cameraEl = document.getElementById('ar-camera');
         const destinoEl = document.getElementById('objeto-destino');
         
         if (!cameraEl || !destinoEl) return;
 
-        // Pega as posições tridimensionais (X, Y, Z) calculadas pelo AR.js no mundo virtual
-        const cameraPos = cameraEl.object3D.position;
+        // Torna a seta visível agora que os componentes existem no mundo virtual
+        this.el.setAttribute('visible', 'true');
+
         const destinoPos = destinoEl.object3D.position;
-
-        // Faz a seta 3D olhar diretamente para o vetor de posição do destino
         this.el.object3D.lookAt(destinoPos);
-
-        // Ajuste de rotação: O cone do A-Frame aponta por padrão para cima no eixo Y.
-        // Rotacionamos 90 graus no eixo X para que a ponta do cone vire para a FRENTE (vetor Z)
-        this.el.object3D.rotateX(Math.PI / 2);
+        this.el.object3D.rotateX(Math.PI / 2); // Corrige a ponta do cone para frente
       }
     });
   </script>
@@ -79,34 +66,40 @@
     embedded
     arjs="sourceType: webcam; debugUIEnabled: false; videoTexture: true;">
     
-<a-camera id="ar-camera" gps-new-camera="simulateLatitude: -3.7413823; simulateLongitude: -38.5131173">
-  
-  <a-entity 
-    id="seta3d" 
-    seta-direcional-3d
-    position="0 -0.3 -1.2" 
-    scale="1 1 1">
-    
-    <a-cone material="color: #ff3333; shader: flat" radius-bottom="0.08" radius-top="0" height="0.25" rotation="0 0 0" position="0 0 0"></a-cone>
-    <a-box material="color: #cc0000; shader: flat" width="0.04" height="0.1" depth="0.04" position="0 -0.12 0"></a-box>
+    <a-camera id="ar-camera" gps-camera="simulateLatitude: -3.7413823; simulateLongitude: -38.5131173" rotation-reader></a-camera>
 
-  </a-entity>
+    <a-entity 
+      id="seta3d" 
+      seta-direcional-3d
+      gps-camera-rotation-specular
+      position="0 -0.5 -1.5" 
+      scale="1 1 1">
+      <a-cone material="color: #ff2222; shader: flat" radius-bottom="0.08" radius-top="0" height="0.25"></a-cone>
+      <a-box material="color: #990000; shader: flat" width="0.03" height="0.08" depth="0.03" position="0 -0.12 0"></a-box>
+    </a-entity>
 
-</a-camera>
-
-    <a-entity id="objeto-destino" gps-new-entity-place="latitude: -3.74128; longitude: -38.510776">
-      <a-cylinder material="color: #00ffcc; opacity: 0.6" radius="3" height="30" position="0 15 0"></a-cylinder>
+    <a-entity id="objeto-destino" gps-entity-place="latitude: -3.74128; longitude: -38.510776">
+      <a-cylinder material="color: #00ffcc; opacity: 0.5; shader: flat" radius="2" height="20" position="0 10 0"></a-cylinder>
     </a-entity>
   </a-scene>
 
   <script>
-    // --- LÓGICA DO MAPA 2D (LEAFLET) E GPS ---
+    // --- ESCUTADOR DE EVENTO DO AR.JS (Garante que a inicialização ocorreu) ---
+    const cameraEl = document.getElementById('ar-camera');
+    
+    cameraEl.addEventListener('gps-camera-update-position', (e) => {
+      // Assim que o AR.js atualiza a primeira posição com sucesso, liberamos a seta 3D
+      gpsPronto = true;
+      document.getElementById('hud-texto').innerText = "GPS Inicializado. Siga a seta 3D!";
+    });
+
+    // --- INTERFACE DO LEAFLET ---
     const map = L.map('mini-map', { zoomControl: false, attributionControl: false }).setView([posAtual.lat, posAtual.lng], 16);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
     const marcadorUsuario = L.marker([posAtual.lat, posAtual.lng]).addTo(map);
     const marcadorDestino = L.marker([posDestino.lat, posDestino.lng]).addTo(map);
-    const rotaLinha = L.polyline([[posAtual.lat, posAtual.lng], [posDestino.lat, posDestino.lng]], { color: '#ff3333', weight: 4 }).addTo(map);
+    const rotaLinha = L.polyline([[posAtual.lat, posAtual.lng], [posDestino.lat, posDestino.lng]], { color: '#ff2222', weight: 4 }).addTo(map);
 
     function calcularDistancia(lat1, lon1, lat2, lon2) {
       const R = 6371e3;
@@ -121,15 +114,17 @@
         posAtual.lat = position.coords.latitude;
         posAtual.lng = position.coords.longitude;
 
-        // Atualiza elementos 2D do mapa
         marcadorUsuario.setLatLng([posAtual.lat, posAtual.lng]);
         map.setView([posAtual.lat, posAtual.lng]);
         rotaLinha.setLatLngs([[posAtual.lat, posAtual.lng], [posDestino.lat, posDestino.lng]]);
 
-        // Atualiza texto de distância
         const metros = calcularDistancia(posAtual.lat, posAtual.lng, posDestino.lat, posDestino.lng);
-        document.getElementById('hud-texto').innerText = `${metros} metros para o destino`;
-      }, (err) => console.log(err), { enableHighAccuracy: true });
+        if(gpsPronto) {
+            document.getElementById('hud-texto').innerText = `${metros} metros para o destino`;
+        }
+      }, (err) => {
+        console.warn("Buscando satélites...", err);
+      }, { enableHighAccuracy: true });
     }
   </script>
 </body>
