@@ -53,7 +53,7 @@
 <body>
 
   <div id="tela-permissao">
-    <h2>Navegador AR Urbano</h2>
+    <h2>Navegador AR Saint White</h2>
     <p>Olhe pelo celular em pé apontando para a rua.<br>Ative os sensores para visualizar o trajeto em tempo real.</p>
     <button id="btn-iniciar">ATIVAR NAVEGAÇÃO 3D</button>
   </div>
@@ -249,7 +249,7 @@
     const marcadorDestino = L.marker([posDestino.lat, posDestino.lng]).addTo(map);
     const rotaLinha = L.polyline([[posAtual.lat, posAtual.lng], [posDestino.lat, posDestino.lng]], { color: '#00b0ff', weight: 4 }).addTo(map);
 
-    function activarGPS() {
+    function ativarGPS() {
       if (navigator.geolocation) {
         navigator.geolocation.watchPosition((position) => {
           posAtual.lat = position.coords.latitude;
