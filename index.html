@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>Navegação AR.js + Leaflet com Seta</title>
+  <title>Navegação AR.js com Seta 3D</title>
 
   <script src="https://aframe.io/releases/1.3.0/aframe.min.js"></script>
   <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar-nft.js"></script>
@@ -14,148 +14,120 @@
   <style>
     body { margin: 0; overflow: hidden; font-family: sans-serif; }
     
-    /* Container do Mini-Mapa */
     #mini-map {
       position: absolute;
       bottom: 20px;
       right: 20px;
-      width: 150px;
-      height: 150px;
+      width: 140px;
+      height: 140px;
       border-radius: 50%;
       border: 3px solid #fff;
       box-shadow: 0px 0px 10px rgba(0,0,0,0.5);
       z-index: 999;
     }
 
-    /* Interface da Seta de Navegação Superior */
-    #navigation-hud {
+    #hud-texto {
       position: absolute;
       top: 20px;
       left: 50%;
       transform: translateX(-50%);
       background: rgba(0, 0, 0, 0.7);
       color: white;
-      padding: 15px 25px;
-      border-radius: 30px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
+      padding: 10px 20px;
+      border-radius: 20px;
+      font-size: 16px;
+      font-weight: bold;
       z-index: 1000;
       pointer-events: none;
     }
-
-    /* Desenho da Seta via CSS */
-    #arrow {
-      width: 0; 
-      height: 0; 
-      border-left: 15px solid transparent;
-      border-right: 15px solid transparent;
-      border-bottom: 30px solid #00ffcc; /* Cor da seta */
-      margin-bottom: 8px;
-      transition: transform 0.2s ease-out; /* Suaviza a rotação da seta */
-    }
-    #distance-text { font-size: 14px; font-weight: bold; }
   </style>
 </head>
 <body>
 
-  <div id="navigation-hud">
-    <div id="arrow"></div>
-    <div id="distance-text">Calculando distância...</div>
-  </div>
-
+  <div id="hud-texto">Calculando distância...</div>
   <div id="mini-map"></div>
+
+  <script>
+    // Configurações das suas Coordenadas Reais
+    let posAtual = { lat: -3.7413823, lng: -38.5131173 };
+    const posDestino = { lat: -3.74128, lng: -38.510776 };
+
+    // Componente customizado do A-Frame para fazer a seta 3D apontar para o destino
+    AFRAME.registerComponent('seta-direcional-3d', {
+      tick: function () {
+        const cameraEl = document.getElementById('ar-camera');
+        const destinoEl = document.getElementById('objeto-destino');
+        
+        if (!cameraEl || !destinoEl) return;
+
+        // Pega as posições tridimensionais (X, Y, Z) calculadas pelo AR.js no mundo virtual
+        const cameraPos = cameraEl.object3D.position;
+        const destinoPos = destinoEl.object3D.position;
+
+        // Faz a seta 3D olhar diretamente para o vetor de posição do destino
+        this.el.object3D.lookAt(destinoPos);
+
+        // Ajuste de rotação: O cone do A-Frame aponta por padrão para cima no eixo Y.
+        // Rotacionamos 90 graus no eixo X para que a ponta do cone vire para a FRENTE (vetor Z)
+        this.el.object3D.rotateX(Math.PI / 2);
+      }
+    });
+  </script>
 
   <a-scene 
     vr-mode-ui="enabled: false"
     embedded
     arjs="sourceType: webcam; debugUIEnabled: false; videoTexture: true;">
     
-    <a-camera id="ar-camera" gps-new-camera="simulateLatitude: -3.7413823; simulateLongitude: -38.5131173"></a-camera>
+    <a-camera id="ar-camera" gps-new-camera="simulateLatitude: -3.7413823; simulateLongitude: -38.5131173">
+      
+      <a-entity 
+        id="seta3d" 
+        seta-direcional-3d
+        position="0 -0.4 -1.5" 
+        scale="0.15 0.3 0.15">
+        <a-cone material="color: #ff3333; metalness: 0.5; roughness: 0.2"></a-cone>
+      </a-entity>
 
-    <a-entity gps-new-entity-place="latitude: -3.74128; longitude: -38.510776">
-      <a-cone material="color: #00ffcc; opacity: 0.8" rotation="180 0 0" position="0 3 0" scale="2 3 2"></a-cone>
+    </a-camera>
+
+    <a-entity id="objeto-destino" gps-new-entity-place="latitude: -3.74128; longitude: -38.510776">
+      <a-cylinder material="color: #00ffcc; opacity: 0.6" radius="3" height="30" position="0 15 0"></a-cylinder>
     </a-entity>
   </a-scene>
 
   <script>
-    // Configurações Globais das suas Coordenadas
-    let posAtual = { lat: -3.7413823, lng: -38.5131173 };
-    const posDestino = { lat: -3.74128, lng: -38.510776 };
-    let dispositivoAngulo = 0;
-
-    // 1. Inicializa o Leaflet
+    // --- LÓGICA DO MAPA 2D (LEAFLET) E GPS ---
     const map = L.map('mini-map', { zoomControl: false, attributionControl: false }).setView([posAtual.lat, posAtual.lng], 16);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
     const marcadorUsuario = L.marker([posAtual.lat, posAtual.lng]).addTo(map);
     const marcadorDestino = L.marker([posDestino.lat, posDestino.lng]).addTo(map);
-    const rotaLinha = L.polyline([[posAtual.lat, posAtual.lng], [posDestino.lat, posDestino.lng]], { color: '#00ffcc', weight: 4 }).addTo(map);
+    const rotaLinha = L.polyline([[posAtual.lat, posAtual.lng], [posDestino.lat, posDestino.lng]], { color: '#ff3333', weight: 4 }).addTo(map);
 
-    // 2. Função Matemática para calcular a direção do Destino (Bearing)
-    function calcularDirecaoDoDestino(lat1, lng1, lat2, lng2) {
-      const dLng = (lng2 - lng1) * Math.PI / 180;
-      const rLat1 = lat1 * Math.PI / 180;
-      const rLat2 = lat2 * Math.PI / 180;
-      
-      const y = Math.sin(dLng) * Math.cos(rLat2);
-      const x = Math.cos(rLat1) * Math.sin(rLat2) - Math.sin(rLat1) * Math.cos(rLat2) * Math.cos(dLng);
-      
-      let brng = Math.atan2(y, x) * 180 / Math.PI;
-      return (brng + 360) % 360; // Retorna o ângulo de 0 a 360 graus
-    }
-
-    // 3. Função para calcular distância simples em metros
     function calcularDistancia(lat1, lon1, lat2, lon2) {
-      const R = 6371e3; // Raio da terra em metros
-      const rLat1 = lat1 * Math.PI / 180;
-      const rLat2 = lat2 * Math.PI / 180;
-      const dLat = (lat2 - lat1) * Math.PI / 180;
-      const dLon = (lon2 - lon1) * Math.PI / 180;
-
-      const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-                Math.cos(rLat1) * Math.cos(rLat2) *
-                Math.sin(dLon/2) * Math.sin(dLon/2);
-      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-      return Math.round(R * c);
+      const R = 6371e3;
+      const rLat1 = lat1 * Math.PI / 180; const rLat2 = lat2 * Math.PI / 180;
+      const dLat = (lat2 - lat1) * Math.PI / 180; const dLon = (lon2 - lon1) * Math.PI / 180;
+      const a = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.cos(rLat1) * Math.cos(rLat2) * Math.sin(dLon/2) * Math.sin(dLon/2);
+      return Math.round(R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a))));
     }
 
-    // 4. Atualiza a Interface de Navegação (Seta + Distância)
-    function atualizarSetaNavegacao() {
-      const direcaoDestino = calcularDirecaoDoDestino(posAtual.lat, posAtual.lng, posDestino.lat, posDestino.lng);
-      
-      // O ângulo da seta é a direção do destino menos para onde o usuário está olhando (bússola)
-      const anguloSeta = direcaoDestino - dispositivoAngulo;
-      
-      document.getElementById('arrow').style.transform = `rotate(${anguloSeta}deg)`;
-      
-      const metros = calcularDistancia(posAtual.lat, posAtual.lng, posDestino.lat, posDestino.lng);
-      document.getElementById('distance-text').innerText = `${metros} metros para o destino`;
-    }
-
-    // 5. Monitora a Caminhada Real do Usuário (GPS Ativo)
     if (navigator.geolocation) {
       navigator.geolocation.watchPosition((position) => {
         posAtual.lat = position.coords.latitude;
         posAtual.lng = position.coords.longitude;
 
-        // Move o marcador do usuário e o mapa conforme ele anda
+        // Atualiza elementos 2D do mapa
         marcadorUsuario.setLatLng([posAtual.lat, posAtual.lng]);
         map.setView([posAtual.lat, posAtual.lng]);
         rotaLinha.setLatLngs([[posAtual.lat, posAtual.lng], [posDestino.lat, posDestino.lng]]);
 
-        atualizarSetaNavegacao();
+        // Atualiza texto de distância
+        const metros = calcularDistancia(posAtual.lat, posAtual.lng, posDestino.lat, posDestino.lng);
+        document.getElementById('hud-texto').innerText = `${metros} metros para o destino`;
       }, (err) => console.log(err), { enableHighAccuracy: true });
     }
-
-    // 6. Monitora o Giro do Corpo do Usuário (Bússola Ativa)
-    window.addEventListener('deviceorientationabsolute', (event) => {
-      if (event.alpha !== null) {
-        dispositivoAngulo = event.alpha; // Guarda para onde o celular aponta
-        atualizarSetaNavegacao();
-      }
-    }, true);
-
   </script>
 </body>
 </html>
