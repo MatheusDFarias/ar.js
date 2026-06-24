@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>Navegador AR.js + Leaflet</title>
+  <title>Navegação AR.js + Leaflet com Seta</title>
 
   <script src="https://aframe.io/releases/1.3.0/aframe.min.js"></script>
   <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar-nft.js"></script>
@@ -12,24 +12,57 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
   <style>
-    body { margin: 0; overflow: hidden; }
+    body { margin: 0; overflow: hidden; font-family: sans-serif; }
     
-    /* Estilo do Mini-Mapa na tela do AR */
+    /* Container do Mini-Mapa */
     #mini-map {
       position: absolute;
       bottom: 20px;
       right: 20px;
-      width: 160px;
-      height: 160px;
+      width: 150px;
+      height: 150px;
       border-radius: 50%;
       border: 3px solid #fff;
-      box-shadow: 0px 0px 12px rgba(0,0,0,0.6);
+      box-shadow: 0px 0px 10px rgba(0,0,0,0.5);
       z-index: 999;
-      transition: transform 0.1s ease;
     }
+
+    /* Interface da Seta de Navegação Superior */
+    #navigation-hud {
+      position: absolute;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0, 0, 0, 0.7);
+      color: white;
+      padding: 15px 25px;
+      border-radius: 30px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      z-index: 1000;
+      pointer-events: none;
+    }
+
+    /* Desenho da Seta via CSS */
+    #arrow {
+      width: 0; 
+      height: 0; 
+      border-left: 15px solid transparent;
+      border-right: 15px solid transparent;
+      border-bottom: 30px solid #00ffcc; /* Cor da seta */
+      margin-bottom: 8px;
+      transition: transform 0.2s ease-out; /* Suaviza a rotação da seta */
+    }
+    #distance-text { font-size: 14px; font-weight: bold; }
   </style>
 </head>
 <body>
+
+  <div id="navigation-hud">
+    <div id="arrow"></div>
+    <div id="distance-text">Calculando distância...</div>
+  </div>
 
   <div id="mini-map"></div>
 
@@ -40,70 +73,89 @@
     
     <a-camera id="ar-camera" gps-new-camera="simulateLatitude: -3.7413823; simulateLongitude: -38.5131173"></a-camera>
 
-    <a-entity 
-      gps-new-entity-place="latitude: -3.74128; longitude: -38.510776"
-      scale="4 4 4">
-      <a-cone material="color: #ff0000; opacity: 0.8" rotation="180 0 0" position="0 5 0"></a-cone>
-      <a-text value="Seu Destino" align="center" position="0 7 0" scale="5 5 5" look-at="#ar-camera"></a-text>
+    <a-entity gps-new-entity-place="latitude: -3.74128; longitude: -38.510776">
+      <a-cone material="color: #00ffcc; opacity: 0.8" rotation="180 0 0" position="0 3 0" scale="2 3 2"></a-cone>
     </a-entity>
-
   </a-scene>
 
   <script>
-    // Coordenadas fornecidas
-    const origem = { lat: -3.7413823, lng: -38.5131173 };
-    const destino = { lat: -3.74128, lng: -38.510776 };
+    // Configurações Globais das suas Coordenadas
+    let posAtual = { lat: -3.7413823, lng: -38.5131173 };
+    const posDestino = { lat: -3.74128, lng: -38.510776 };
+    let dispositivoAngulo = 0;
 
-    // 1. Inicializa o mapa do Leaflet focado na sua origem
-    const map = L.map('mini-map', {
-      zoomControl: false,
-      attributionControl: false
-    }).setView([origem.lat, origem.lng], 16);
-
-    // Adiciona o mapa de ruas gratuito (OpenStreetMap)
+    // 1. Inicializa o Leaflet
+    const map = L.map('mini-map', { zoomControl: false, attributionControl: false }).setView([posAtual.lat, posAtual.lng], 16);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
-    // Marcadores no Mini-mapa
-    const marcadorUsuario = L.marker([origem.lat, origem.lng]).addTo(map).bindPopup('Você');
-    const marcadorDestino = L.marker([destino.lat, destino.lng]).addTo(map).bindPopup('Destino');
+    const marcadorUsuario = L.marker([posAtual.lat, posAtual.lng]).addTo(map);
+    const marcadorDestino = L.marker([posDestino.lat, posDestino.lng]).addTo(map);
+    const rotaLinha = L.polyline([[posAtual.lat, posAtual.lng], [posDestino.lat, posDestino.lng]], { color: '#00ffcc', weight: 4 }).addTo(map);
 
-    // Desenha uma linha reta simples (métrica) ligando a origem ao destino no mapa
-    const rotaLinha = L.polyline([
-      [origem.lat, origem.lng],
-      [destino.lat, destino.lng]
-    ], { color: 'blue', weight: 4, opacity: 0.7 }).addTo(map);
-
-
-    // 2. Sincronização de Movimento Real (GPS)
-    if (navigator.geolocation) {
-      navigator.geolocation.watchPosition((position) => {
-        const latAtual = position.coords.latitude;
-        const lngAtual = position.coords.longitude;
-
-        // Atualiza a posição do usuário no mapa 2D conforme ele anda
-        marcadorUsuario.setLatLng([latAtual, lngAtual]);
-        map.setView([latAtual, lngAtual]);
-        
-        // Atualiza a linha do trajeto dinamicamente
-        rotaLinha.setLatLngs([[latAtual, lngAtual], [destino.lat, destino.lng]]);
-      }, (err) => {
-        console.warn("Aguardando sinal de GPS preciso...", err);
-      }, {
-        enableHighAccuracy: true
-      });
+    // 2. Função Matemática para calcular a direção do Destino (Bearing)
+    function calcularDirecaoDoDestino(lat1, lng1, lat2, lng2) {
+      const dLng = (lng2 - lng1) * Math.PI / 180;
+      const rLat1 = lat1 * Math.PI / 180;
+      const rLat2 = lat2 * Math.PI / 180;
+      
+      const y = Math.sin(dLng) * Math.cos(rLat2);
+      const x = Math.cos(rLat1) * Math.sin(rLat2) - Math.sin(rLat1) * Math.cos(rLat2) * Math.cos(dLng);
+      
+      let brng = Math.atan2(y, x) * 180 / Math.PI;
+      return (brng + 360) % 360; // Retorna o ângulo de 0 a 360 graus
     }
 
-    // 3. Sincronização de Direção (Bússola)
-    // Faz o mini-mapa rotacionar para que a frente do mapa seja sempre para onde você está olhando
-    const mapElement = document.getElementById('mini-map');
+    // 3. Função para calcular distância simples em metros
+    function calcularDistancia(lat1, lon1, lat2, lon2) {
+      const R = 6371e3; // Raio da terra em metros
+      const rLat1 = lat1 * Math.PI / 180;
+      const rLat2 = lat2 * Math.PI / 180;
+      const dLat = (lat2 - lat1) * Math.PI / 180;
+      const dLon = (lon2 - lon1) * Math.PI / 180;
+
+      const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                Math.cos(rLat1) * Math.cos(rLat2) *
+                Math.sin(dLon/2) * Math.sin(dLon/2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+      return Math.round(R * c);
+    }
+
+    // 4. Atualiza a Interface de Navegação (Seta + Distância)
+    function atualizarSetaNavegacao() {
+      const direcaoDestino = calcularDirecaoDoDestino(posAtual.lat, posAtual.lng, posDestino.lat, posDestino.lng);
+      
+      // O ângulo da seta é a direção do destino menos para onde o usuário está olhando (bússola)
+      const anguloSeta = direcaoDestino - dispositivoAngulo;
+      
+      document.getElementById('arrow').style.transform = `rotate(${anguloSeta}deg)`;
+      
+      const metros = calcularDistancia(posAtual.lat, posAtual.lng, posDestino.lat, posDestino.lng);
+      document.getElementById('distance-text').innerText = `${metros} metros para o destino`;
+    }
+
+    // 5. Monitora a Caminhada Real do Usuário (GPS Ativo)
+    if (navigator.geolocation) {
+      navigator.geolocation.watchPosition((position) => {
+        posAtual.lat = position.coords.latitude;
+        posAtual.lng = position.coords.longitude;
+
+        // Move o marcador do usuário e o mapa conforme ele anda
+        marcadorUsuario.setLatLng([posAtual.lat, posAtual.lng]);
+        map.setView([posAtual.lat, posAtual.lng]);
+        rotaLinha.setLatLngs([[posAtual.lat, posAtual.lng], [posDestino.lat, posDestino.lng]]);
+
+        atualizarSetaNavegacao();
+      }, (err) => console.log(err), { enableHighAccuracy: true });
+    }
+
+    // 6. Monitora o Giro do Corpo do Usuário (Bússola Ativa)
     window.addEventListener('deviceorientationabsolute', (event) => {
       if (event.alpha !== null) {
-        let bussolaGraus = event.alpha;
-        // Rotaciona a DIV do Leaflet inversamente ao giro do celular
-        mapElement.style.transform = `rotate(${-bussolaGraus}deg)`;
+        dispositivoAngulo = event.alpha; // Guarda para onde o celular aponta
+        atualizarSetaNavegacao();
       }
     }, true);
-  </script>
 
+  </script>
 </body>
 </html>
