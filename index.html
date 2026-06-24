@@ -3,10 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>Navegação AR.js Estabilizada</title>
+  <title>Navegação AR.js Core Localização</title>
 
   <script src="https://aframe.io/releases/1.3.0/aframe.min.js"></script>
-  <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar-nft.js"></script>
+  
+  <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar-location-only.js"></script>
 
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -22,13 +23,12 @@
       position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
       background: rgba(0, 0, 0, 0.8); color: white; padding: 10px 20px;
       border-radius: 20px; font-size: 16px; font-weight: bold; z-index: 1000;
-      text-align: center;
+      text-align: center; width: 80%; max-width: 300px;
     }
-    /* Tela de bloqueio para pedir permissão dos sensores no iOS/Android */
     #tela-permissao {
       position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-      background: rgba(0,0,0,0.9); color: white; z-index: 9999;
-      display: flex; flex-direction: column; justify-content: center; align-items: center;
+      background: rgba(0,0,0,0.95); color: white; z-index: 9999;
+      display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; padding: 20px;
     }
     #btn-iniciar {
       background: #00ffcc; color: black; border: none; padding: 15px 30px;
@@ -39,12 +39,12 @@
 <body>
 
   <div id="tela-permissao">
-    <h2>Navegador AR com Seta 3D</h2>
-    <p>Clique abaixo para ativar a câmera e os sensores de direção.</p>
-    <button id="btn-iniciar">INICIAR NAVEGAÇÃO</button>
+    <h2>Navegador AR 3D</h2>
+    <p>Para alinhar a seta tridimensional, precisamos acessar os sensores de orientação espacial e localização do seu aparelho.</p>
+    <button id="btn-iniciar">ATIVAR SENSORES</button>
   </div>
 
-  <div id="hud-texto">Aguardando ativação...</div>
+  <div id="hud-texto">Aguardando ativação dos sensores...</div>
   <div id="mini-map"></div>
 
   <script>
@@ -52,34 +52,34 @@
     const posDestino = { lat: -3.74128, lng: -38.510776 };
     let gpsPronto = false;
 
-    // Lógica para pedir autorização dos sensores modernos (iOS 13+ e Android novos)
     document.getElementById('btn-iniciar').addEventListener('click', function() {
+      // Solicitação explícita dos sensores modernos de orientação (Correção para o erro de obsoleto)
       if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-        // Caso seja iOS/Safari
         DeviceOrientationEvent.requestPermission()
           .then(permissionState => {
             if (permissionState === 'granted') {
               inicializarApp();
             } else {
-              alert('Permissão de orientação recusada.');
+              alert('Os sensores de bússola foram negados. A seta não poderá girar de forma síncrona.');
+              inicializarApp(); 
             }
           })
-          .catch(console.error);
+          .catch(err => {
+            console.error(err);
+            inicializarApp();
+          });
       } else {
-        // Caso seja Android/Chrome (não precisa da API de promessa, mas precisa do clique)
         inicializarApp();
       }
     });
 
     function inicializarApp() {
       document.getElementById('tela-permissao').style.display = 'none';
-      document.getElementById('hud-texto').innerText = "Buscando sinal de GPS do satélite...";
-      
-      // Ativa o rastreamento de localização real
+      document.getElementById('hud-texto').innerText = "Calibrando GPS e Renderizando Seta...";
       ativarGPS();
     }
 
-    // Componente customizado da Seta 3D
+    // Componente da Seta 3D
     AFRAME.registerComponent('seta-direcional-3d', {
       init: function() {
         this.el.setAttribute('visible', 'false');
@@ -94,31 +94,31 @@
 
         this.el.setAttribute('visible', 'true');
 
+        // Captura a posição gerada para o destino no ambiente 3D
         const destinoPos = destinoEl.object3D.position;
+        
+        // Faz o node do A-Frame apontar seus eixos para o vetor do destino
         this.el.object3D.lookAt(destinoPos);
-        this.el.object3D.rotateX(Math.PI / 2); // Aponta o cone para frente
+        this.el.object3D.rotateX(Math.PI / 2); // Alinha o bico do cone para a frente
       }
     });
   </script>
 
-  <a-scene 
-    vr-mode-ui="enabled: false"
-    embedded
-    arjs="sourceType: webcam; debugUIEnabled: false; videoTexture: true;">
+  <a-scene embedded arjs="sourceType: webcam; videoTexture: true; debugUIEnabled: false;">
     
     <a-camera id="ar-camera" gps-camera="simulateLatitude: -3.7413823; simulateLongitude: -38.5131173" rotation-reader></a-camera>
 
     <a-entity 
       id="seta3d" 
       seta-direcional-3d
-      position="0 -0.4 -1.2" 
+      position="0 -0.4 -1.3" 
       scale="1 1 1">
-      <a-cone material="color: #ff2222; shader: flat" radius-bottom="0.07" radius-top="0" height="0.22"></a-cone>
-      <a-box material="color: #990000; shader: flat" width="0.03" height="0.08" depth="0.03" position="0 -0.1 0"></a-box>
+      <a-cone material="color: #ff2222; shader: flat" radius-bottom="0.06" radius-top="0" height="0.22"></a-cone>
+      <a-box material="color: #990000; shader: flat" width="0.02" height="0.07" depth="0.02" position="0 -0.11 0"></a-box>
     </a-entity>
 
     <a-entity id="objeto-destino" gps-entity-place="latitude: -3.74128; longitude: -38.510776">
-      <a-cylinder material="color: #00ffcc; opacity: 0.5; shader: flat" radius="2" height="20" position="0 10 0"></a-cylinder>
+      <a-cylinder material="color: #00ffcc; opacity: 0.4; shader: flat" radius="1.5" height="15" position="0 7.5 0"></a-cylinder>
     </a-entity>
   </a-scene>
 
@@ -139,10 +139,10 @@
       return Math.round(R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a))));
     }
 
-    function ativarGPS() {
+    function activarGPS() {
       const cameraEl = document.getElementById('ar-camera');
       
-      cameraEl.addEventListener('gps-camera-update-position', (e) => {
+      cameraEl.addEventListener('gps-camera-update-position', () => {
         gpsPronto = true;
       });
 
@@ -156,10 +156,10 @@
           rotaLinha.setLatLngs([[posAtual.lat, posAtual.lng], [posDestino.lat, posDestino.lng]]);
 
           const metros = calcularDistancia(posAtual.lat, posAtual.lng, posDestino.lat, posDestino.lng);
-          if(gpsPronto) {
-              document.getElementById('hud-texto').innerText = `${metros} metros para o destino.\nSiga a seta 3D vermelha!`;
+          if (gpsPronto) {
+            document.getElementById('hud-texto').innerText = `${metros}m para o destino.\nSiga a seta 3D vermelha!`;
           }
-        }, (err) => console.log(err), { enableHighAccuracy: true });
+        }, (err) => console.error(err), { enableHighAccuracy: true });
       }
     }
   </script>
