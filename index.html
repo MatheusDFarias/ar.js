@@ -22,28 +22,69 @@
       position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
       background: rgba(0, 0, 0, 0.8); color: white; padding: 10px 20px;
       border-radius: 20px; font-size: 16px; font-weight: bold; z-index: 1000;
+      text-align: center;
+    }
+    /* Tela de bloqueio para pedir permissão dos sensores no iOS/Android */
+    #tela-permissao {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.9); color: white; z-index: 9999;
+      display: flex; flex-direction: column; justify-content: center; align-items: center;
+    }
+    #btn-iniciar {
+      background: #00ffcc; color: black; border: none; padding: 15px 30px;
+      font-size: 18px; font-weight: bold; border-radius: 25px; cursor: pointer; margin-top: 20px;
     }
   </style>
 </head>
 <body>
 
-  <div id="hud-texto">Aguardando sinal de GPS do dispositivo...</div>
+  <div id="tela-permissao">
+    <h2>Navegador AR com Seta 3D</h2>
+    <p>Clique abaixo para ativar a câmera e os sensores de direção.</p>
+    <button id="btn-iniciar">INICIAR NAVEGAÇÃO</button>
+  </div>
+
+  <div id="hud-texto">Aguardando ativação...</div>
   <div id="mini-map"></div>
 
   <script>
-    // Suas Coordenadas Reais configuradas de forma global
     let posAtual = { lat: -3.7413823, lng: -38.5131173 };
     const posDestino = { lat: -3.74128, lng: -38.510776 };
     let gpsPronto = false;
 
-    // Componente customizado com verificação de segurança (Impede o erro de inicialização)
+    // Lógica para pedir autorização dos sensores modernos (iOS 13+ e Android novos)
+    document.getElementById('btn-iniciar').addEventListener('click', function() {
+      if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+        // Caso seja iOS/Safari
+        DeviceOrientationEvent.requestPermission()
+          .then(permissionState => {
+            if (permissionState === 'granted') {
+              inicializarApp();
+            } else {
+              alert('Permissão de orientação recusada.');
+            }
+          })
+          .catch(console.error);
+      } else {
+        // Caso seja Android/Chrome (não precisa da API de promessa, mas precisa do clique)
+        inicializarApp();
+      }
+    });
+
+    function inicializarApp() {
+      document.getElementById('tela-permissao').style.display = 'none';
+      document.getElementById('hud-texto').innerText = "Buscando sinal de GPS do satélite...";
+      
+      // Ativa o rastreamento de localização real
+      ativarGPS();
+    }
+
+    // Componente customizado da Seta 3D
     AFRAME.registerComponent('seta-direcional-3d', {
       init: function() {
-        // Oculta a seta no início até que o GPS esteja 100% calibrado
         this.el.setAttribute('visible', 'false');
       },
       tick: function () {
-        // Se o GPS ainda não inicializou e enviou dados válidos, não executa a rotação 3D
         if (!gpsPronto) return;
 
         const cameraEl = document.getElementById('ar-camera');
@@ -51,12 +92,11 @@
         
         if (!cameraEl || !destinoEl) return;
 
-        // Torna a seta visível agora que os componentes existem no mundo virtual
         this.el.setAttribute('visible', 'true');
 
         const destinoPos = destinoEl.object3D.position;
         this.el.object3D.lookAt(destinoPos);
-        this.el.object3D.rotateX(Math.PI / 2); // Corrige a ponta do cone para frente
+        this.el.object3D.rotateX(Math.PI / 2); // Aponta o cone para frente
       }
     });
   </script>
@@ -71,11 +111,10 @@
     <a-entity 
       id="seta3d" 
       seta-direcional-3d
-      gps-camera-rotation-specular
-      position="0 -0.5 -1.5" 
+      position="0 -0.4 -1.2" 
       scale="1 1 1">
-      <a-cone material="color: #ff2222; shader: flat" radius-bottom="0.08" radius-top="0" height="0.25"></a-cone>
-      <a-box material="color: #990000; shader: flat" width="0.03" height="0.08" depth="0.03" position="0 -0.12 0"></a-box>
+      <a-cone material="color: #ff2222; shader: flat" radius-bottom="0.07" radius-top="0" height="0.22"></a-cone>
+      <a-box material="color: #990000; shader: flat" width="0.03" height="0.08" depth="0.03" position="0 -0.1 0"></a-box>
     </a-entity>
 
     <a-entity id="objeto-destino" gps-entity-place="latitude: -3.74128; longitude: -38.510776">
@@ -84,16 +123,7 @@
   </a-scene>
 
   <script>
-    // --- ESCUTADOR DE EVENTO DO AR.JS (Garante que a inicialização ocorreu) ---
-    const cameraEl = document.getElementById('ar-camera');
-    
-    cameraEl.addEventListener('gps-camera-update-position', (e) => {
-      // Assim que o AR.js atualiza a primeira posição com sucesso, liberamos a seta 3D
-      gpsPronto = true;
-      document.getElementById('hud-texto').innerText = "GPS Inicializado. Siga a seta 3D!";
-    });
-
-    // --- INTERFACE DO LEAFLET ---
+    // --- MAPA LEAFLET ---
     const map = L.map('mini-map', { zoomControl: false, attributionControl: false }).setView([posAtual.lat, posAtual.lng], 16);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
@@ -109,22 +139,28 @@
       return Math.round(R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a))));
     }
 
-    if (navigator.geolocation) {
-      navigator.geolocation.watchPosition((position) => {
-        posAtual.lat = position.coords.latitude;
-        posAtual.lng = position.coords.longitude;
+    function ativarGPS() {
+      const cameraEl = document.getElementById('ar-camera');
+      
+      cameraEl.addEventListener('gps-camera-update-position', (e) => {
+        gpsPronto = true;
+      });
 
-        marcadorUsuario.setLatLng([posAtual.lat, posAtual.lng]);
-        map.setView([posAtual.lat, posAtual.lng]);
-        rotaLinha.setLatLngs([[posAtual.lat, posAtual.lng], [posDestino.lat, posDestino.lng]]);
+      if (navigator.geolocation) {
+        navigator.geolocation.watchPosition((position) => {
+          posAtual.lat = position.coords.latitude;
+          posAtual.lng = position.coords.longitude;
 
-        const metros = calcularDistancia(posAtual.lat, posAtual.lng, posDestino.lat, posDestino.lng);
-        if(gpsPronto) {
-            document.getElementById('hud-texto').innerText = `${metros} metros para o destino`;
-        }
-      }, (err) => {
-        console.warn("Buscando satélites...", err);
-      }, { enableHighAccuracy: true });
+          marcadorUsuario.setLatLng([posAtual.lat, posAtual.lng]);
+          map.setView([posAtual.lat, posAtual.lng]);
+          rotaLinha.setLatLngs([[posAtual.lat, posAtual.lng], [posDestino.lat, posDestino.lng]]);
+
+          const metros = calcularDistancia(posAtual.lat, posAtual.lng, posDestino.lat, posDestino.lng);
+          if(gpsPronto) {
+              document.getElementById('hud-texto').innerText = `${metros} metros para o destino.\nSiga a seta 3D vermelha!`;
+          }
+        }, (err) => console.log(err), { enableHighAccuracy: true });
+      }
     }
   </script>
 </body>
